@@ -1,7 +1,7 @@
 #' ---
-#' title: Metadata 2016 Spring
+#' title: Metadata 2016 Spring - Text mining with json data
 #' author: SY YU
-#' date: 2016-05-11
+#' date: 2016-05-18
 #' ---
 
 library(rjson)
@@ -75,14 +75,29 @@ df_stem_freq<-data.frame(stem_freq)
 str(df_stem_freq)
 desc_df_stem_freq<- df_stem_freq[order(-df_stem_freq$Freq),]
 
-### With Stemmed docs
+#####With Stemmed docs
 
 ###Term-Doc Matrix with Stemming
 class(stem_docs)
 stem_docs <- Corpus(VectorSource(stem_docs))
 class(stem_docs)
 
-####
+###term weight: Tf
+ted_tdm_tf <- TermDocumentMatrix(stem_docs,
+                                 control = list(removePunctuation = TRUE,
+                                                weighting=weightTf,
+                                                stopwords = TRUE))
+
+inspect(ted_tdm_tf[1,])
+
+###Frequent terms:Tf
+findFreqTerms(ted_tdm_tf, lowfreq = 3)
+findFreqTerms(ted_tdm_tf, lowfreq = 4)
+
+termFrequency_tdm_tf <- rowSums(as.matrix(ted_tdm_tf))
+termFrequency_tdm_tf
+
+###term weight: TfIDF
 ted_tdm <- TermDocumentMatrix(stem_docs,
                                  control = list(removePunctuation = TRUE,
                                                 weighting=weightTfIdf,
@@ -90,9 +105,13 @@ ted_tdm <- TermDocumentMatrix(stem_docs,
 
 inspect(ted_tdm[1,])
 
+###Frequent terms with TfIDF for comparing to Tf
+findFreqTerms(ted_tdm, lowfreq = 0.3)
+findFreqTerms(ted_tdm, lowfreq = 0.1)
 
-###Compare & Recommend with Stemming
-#### Frequent index terms and 'creativ'
+
+#####Compare & Recommend with Stemming
+### Frequent terms and 'creativ'
 head(ted_tdm_df_stem_freq)
 
 creativ_assoc<-findAssocs(ted_tdm, "creativ", corlimit = 0.5)
@@ -101,48 +120,64 @@ creativ_assoc
 design_assoc<-findAssocs(ted_tdm, "design", corlimit = 0.5)
 design_assoc
 
-#####
-findFreqTerms(ted_tdm, lowfreq = 0.3)
-findFreqTerms(ted_tdm, lowfreq = 0.1)
+class(creativ_assoc)
+str(creativ_assoc)
+creativ_assoc
 
-####
-ted_tdm_tf <- TermDocumentMatrix(stem_docs,
-                              control = list(removePunctuation = TRUE,
-                                             weighting=weightTf,
-                                             stopwords = TRUE))
+write.table(design_assoc, "./design_assoc_matrix.txt")
 
-inspect(ted_tdm_tf[1,])
+df_design_assoc<-as.data.frame(design_assoc)
+df_design_assoc
 
-findFreqTerms(ted_tdm_tf, lowfreq = 3)
-findFreqTerms(ted_tdm_tf, lowfreq = 4)
-#####
-termFrequency_tdm <- rowSums(as.matrix(ted_tdm))
-termFrequency_tdm
-#####
-termFrequency_tdm_tf <- rowSums(as.matrix(ted_tdm_tf))
-termFrequency_tdm_tf
-#####
-###
+list_design_assoc<-as.list(df_design_assoc)
+list_design_assoc
+
+names(list_design_assoc$design)<-rownames(df_design_assoc)
+list_design_assoc
+
+###cat(sep=" ") is DEFAULT!! Need to set sep="".
+
+fnlist <- function(x, fil){
+  for (v in seq_along(x)){
+    nam_i<-names(x[v])
+    kwd=names(x[[v]])
+    for (i in seq_along(x[[v]]) ){ cat(nam_i,"\t",kwd[i],"\t", x[[v]][i],"\n", sep="",
+                                       file=fil, append=TRUE) }
+  }
+}
+
+#fnlist_file="./design_assoc_list.txt"
+
+if (file.exists(fnlist_file)){
+  unlink(fnlist_file, recursive = TRUE)
+  fnlist(list_design_assoc, "./design_assoc_list.txt")
+} else fnlist(list_design_assoc, "./design_assoc_list.txt")
+
+#####Hierachical Clustering 
+###removing sparse terms
 ted_tdm_sparse <- removeSparseTerms(ted_tdm, sparse = 0.90)
 ted_tdm_sparse$nrow
 ted_tdm<-ted_tdm_sparse
 
+#convert to matrix
 ted_m <- as.matrix(ted_tdm)
 
-#dist {stats} Distance Matrix Computation
-#scale {base} Scaling and Centering of Matrix-like Objects
+###dist {stats} Distance Matrix Computation
+###scale {base} Scaling and Centering of Matrix-like Objects
 distMatrix<- dist(scale(ted_m))
 
-#hclust {stats} Hierarchical Clustering
+###hclust {stats} Hierarchical Clustering
+###method=c("single", complete", "average", "mcquitty", "median, "centroid", "ward.D", "ward.D2)
 fit <- hclust(distMatrix, method="ward.D")
 plot(fit)
 
-#rect.hclust {stats} Draw Rectangles Around Hierarchical Clusters
+###rect.hclust {stats} Draw Rectangles Around Hierarchical Clusters
 rect.hclust(fit, k=10)
 
 ###Save Dendrogram as PNG image file
 png("./ted_creativ_ward_dendrogram_sparse90.png", width = 1200, height=600)
 plot(fit)
+#k: number of clusters
 rect.hclust(fit, k=10)
 dev.off()
 
@@ -152,4 +187,5 @@ df_groups <- data.frame(groups)
 str(df_groups)
 df_groups$KWD <- rownames(df_groups)
 str(df_groups)
+###Write the clustering result to text file
 write.table(df_groups, "./ted_creativ_ward2_sparse90_res.txt", row.names=FALSE, col.names=TRUE, sep="\t")
