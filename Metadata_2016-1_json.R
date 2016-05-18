@@ -61,8 +61,9 @@ ted_docs <- tm_map(ted_docs, removeWords, stopwords("SMART"))
 strsplit_space_tokenizer <- function(x)
   unlist(strsplit(as.character(x), "[[:space:]]+"))
 token_docs<-(sapply(ted_docs, strsplit_space_tokenizer))
-token_docs<-(sapply(token_docs, function(x){gsub(" ","", x)}))
 #token_docs<-(sapply(ted_docs$content, strsplit_space_tokenizer))
+token_docs<-(sapply(token_docs, function(x){gsub(" ","", x)}))
+#token_docs<-(sapply(token_docs$content, function(x){gsub(" ","", x)}))
 token_freq<-table(unlist(token_docs))
 summary(data.frame(token_freq)$Freq)
 
@@ -112,7 +113,7 @@ findFreqTerms(ted_tdm, lowfreq = 0.1)
 
 #####Compare & Recommend with Stemming
 ### Frequent terms and 'creativ'
-head(ted_tdm_df_stem_freq)
+#head(termFrequency_tdm_tf)
 
 creativ_assoc<-findAssocs(ted_tdm, "creativ", corlimit = 0.5)
 creativ_assoc
@@ -135,6 +136,7 @@ list_design_assoc
 names(list_design_assoc$design)<-rownames(df_design_assoc)
 list_design_assoc
 
+###Write associate terms in file
 ###cat(sep=" ") is DEFAULT!! Need to set sep="".
 
 fnlist <- function(x, fil){
@@ -146,7 +148,7 @@ fnlist <- function(x, fil){
   }
 }
 
-#fnlist_file="./design_assoc_list.txt"
+fnlist_file="./design_assoc_list.txt"
 
 if (file.exists(fnlist_file)){
   unlink(fnlist_file, recursive = TRUE)
