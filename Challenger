@@ -1,2 +1,204 @@
+#' --- 
+#' title: Metadata 2016 Challenge - Term Clustering with json data 
+#' author: BK  JU
+#' date: 2016-06-20 
+#' --- 
 
-a
+library(rjson) 
+library(RCurl) 
+library(tm) 
+library(SnowballC) 
+ 
+###Set working dir path 
+###출처: http://stackoverflow.com/questions/27524122/how-to-combine-multiple-json-files-into-a-single-file-in-r
+###구글에다가 json merge in r을 입력후 첫번째 홈페이지인 stackoverflow를 활용하였습니다.
+setwd("C:/meta2016") #D드라이브가 없어서 C드라이브로 진행
+json1 <- fromJSON(file = "talks_art.json")
+json2 <- fromJSON(file = "talks_free.json")
+json3 <- fromJSON(file = "talks_music.json")
+json4 <- fromJSON(file = "talks_time.json")
+jsonl <- list(json1, json2, json3, json4 )
+j_file2 <- toJSON(jsonl) #JSON형태로 바꾼다.
+j_file2
+write(j_file2, "j_file2.json") #4개의 파일을 하나인파일인j_file2.json로 만들기
+
+###Read a json file to workspace  (workspace에서 json파일 읽어오기)
+talk_creativ<-fromJSON(file="j_file2.json", method="C")
+str(talk_creativ) 
+ 
+#talk_names<-names(talk_creativ$talks[[1]]$talk) #색인을 원래코드로 진행하였으나 null값이 발생하였습니다.
+#talk_names<-names(talk_creativ$talks[[1]]$talk[[1]]) #다른 곳에 넣어서 시도
+#talk_names<-names(talk_creativ$[[1]]talks[[1]]$talk) #다른 곳에 넣어서 시도
+talk_names<-names(talk_creativ[[1]]$talks[[1]]$talk) #성공
+talk_names 
+
+###Convertobject type              
+#색인을 안넣어주고 실행시 null값 발생, 그래서 위에 한것처럼 [[1]]을 넣어줌
+#talk_creativ_list<-lapply(talk_creativ$talks, function(x){unlist(x)}) 
+talk_creativ_list<-lapply(talk_creativ[[1]]$talks, function(x){unlist(x)}) 
+str(talk_creativ_list) 
+parse_talk_all<-data.frame() #데이터 프레임을 만들어줌
+df_parse_talk_all<-do.call("rbind", c(parse_talk_all, talk_creativ_list)) 
+str(df_parse_talk_all) 
+ 
+df_parse_talk_all<-data.frame(df_parse_talk_all) 
+str(df_parse_talk_all) 
+ 
+###Chage datatype of talk description 
+df_parse_talk_all$talk.description<-as.character(df_parse_talk_all$talk.description) 
+str(df_parse_talk_all$talk.description) 
+ 
+###Change names of variables 
+names(df_parse_talk_all)<-talk_names 
+str(df_parse_talk_all) 
+
+#####Term Clustering 
+###Convert object type 
+class(df_parse_talk_all$description) 
+ted_docs <- Corpus(VectorSource(df_parse_talk_all$description)) 
+class(ted_docs) 
+ 
+###Pre-processing 
+ted_docs <- tm_map(ted_docs, tolower) #소문자로 바꿈
+ted_docs <- tm_map(ted_docs, removeNumbers) #숫자로 바꿈
+ted_docs <- tm_map(ted_docs, removePunctuation) #구두점을 없앰
+ted_docs <- tm_map(ted_docs, removeWords, stopwords("SMART"))#불용어
+ted_docs <- tm_map(ted_docs, removeWords, "ted") 
+
+###Tokenizing 
+strsplit_space_tokenizer <- function(x) 
+unlist(strsplit(as.character(x), "[[:space:]]+")) 
+#token_docs<-(sapply(ted_docs, strsplit_space_tokenizer)) #에러가 발생하여 밑에 코드로 진행
+token_docs<-(sapply(ted_docs$content, strsplit_space_tokenizer)) 
+token_freq<-table(unlist(token_docs)) 
+summary(data.frame(token_freq)$Freq) 
+ 
+###Stemming 
+stem_docs <- sapply(token_docs, stemDocument) 
+stem_freq<-table(unlist(stem_docs)) 
+summary(data.frame(stem_freq)$Freq) 
+ 
+df_stem_freq<-data.frame(stem_freq) 
+str(df_stem_freq) 
+ 
+
+###Term-Doc Matrix with Stemming 
+class(stem_docs) 
+stem_docs <- Corpus(VectorSource(stem_docs)) 
+class(stem_docs) 
+ 
+###term weight: TfIDF 
+ted_tdm <- TermDocumentMatrix(stem_docs, 
+           control = list(removePunctuation = TRUE, 
+           weighting=weightTfIdf, 
+           stopwords = TRUE)) 
+ 
+inspect(ted_tdm[1,]) 
+ 
+
+#####Hierachical Clustering: Term Clustering 
+###Remove sparse terms #sparse 값을 다르게 해줌
+ted_tdm_sparse1 <- removeSparseTerms(ted_tdm, sparse = 0.891) 
+ted_tdm_sparse1$nrow 
+ted_tdm1<-ted_tdm_sparse1 
+
+ted_tdm_sparse2 <- removeSparseTerms(ted_tdm, sparse = 0.888) 
+ted_tdm_sparse2$nrow 
+ted_tdm2<-ted_tdm_sparse2 
+
+ted_tdm_sparse3 <- removeSparseTerms(ted_tdm, sparse = 0.885) 
+ted_tdm_sparse3$nrow 
+ted_tdm3<-ted_tdm_sparse3 
+
+ted_tdm_sparse4 <- removeSparseTerms(ted_tdm, sparse = 0.897) 
+ted_tdm_sparse4$nrow 
+ted_tdm4<-ted_tdm_sparse4 
+ 
+###Convert to matrix 
+ted_m1 <- as.matrix(ted_tdm1) 
+ted_m2 <- as.matrix(ted_tdm2)
+ted_m3 <- as.matrix(ted_tdm3)
+ted_m4 <- as.matrix(ted_tdm4)
+###Calculate similarity 
+###dist {stats} Distance Matrix Computation 
+###scale {base} Scaling and Centering of Matrix-like Objects 
+distMatrix1<- dist(scale(ted_tdm1))
+distMatrix2<- dist(scale(ted_tdm2))
+distMatrix3<- dist(scale(ted_tdm3))
+distMatrix4<- dist(scale(ted_tdm4))
+ 
+###Execute hierarchial clustering 
+###hclust {stats} Hierarchical Clustering 
+###method=c("single", complete", "average", "mcquitty", "median, "centroid", "ward.D", "ward.D2) 
+fit1 <- hclust(distMatrix1, method="complete") 
+fit2 <- hclust(distMatrix2, method="single") #각 기법에 맞게 돌려줌
+fit3 <- hclust(distMatrix3, method="average") 
+fit4 <- hclust(distMatrix4, method="ward.D") 
+###Draw dendrogram 
+plot(fit1) 
+plot(fit2) 
+plot(fit3) 
+plot(fit4) 
+###rect.hclust {stats} Draw Rectangles Around Hierarchical Clusters 
+###k = number of clusters 
+#rect.hclust(fit, k=8) #클러스터링을 8로 지정하였으나 k의 갯수가 2와 7사이에 있어야한다고 오류가남
+rect.hclust(fit1, k=5)
+rect.hclust(fit2, k=5)
+rect.hclust(fit3, k=5)
+rect.hclust(fit4, k=5)
+ 
+###Save the dendrogram as PNG image file 
+png("./dendrogram_complete.png", width = 1200, height=600) 
+plot(fit1) 
+png("./dendrogram_single.png", width = 1200, height=600) 
+plot(fit2) 
+png("./dendrogram_average.png", width = 1200, height=600) 
+plot(fit3) 
+png("./dendrogram_ward.D.png", width = 1200, height=600) 
+plot(fit4) 
+###k= number of clusters 
+rect.hclust(fit1, k=5) 
+dev.off() 
+rect.hclust(fit2, k=5) 
+dev.off() 
+rect.hclust(fit3, k=5) 
+dev.off() 
+rect.hclust(fit4, k=5) 
+dev.off() 
+ 
+###Assign a cluster to a term 
+###cutree {stats} Cut a Tree into Groups of Data 
+###k= number of clusters 
+groups1 <- cutree(fit1, k=5) 
+df_groups1 <- data.frame(groups1) 
+str(df_groups1) 
+df_groups1$KWD <- rownames(df_groups1) 
+str(df_groups1) 
+
+groups2 <- cutree(fit2, k=5) 
+df_groups2 <- data.frame(groups2) 
+str(df_groups2) 
+df_groups2$KWD <- rownames(df_groups2) 
+str(df_groups2) 
+
+groups3 <- cutree(fit3, k=5) 
+df_groups3 <- data.frame(groups3) 
+str(df_groups3) 
+df_groups3$KWD <- rownames(df_groups3) 
+str(df_groups3) 
+
+groups4 <- cutree(fit4, k=5) 
+df_groups4 <- data.frame(groups4) 
+str(df_groups4) 
+df_groups4$KWD <- rownames(df_groups4) 
+str(df_groups4) 
+ 
+###Write the clustering result to text file  
+#각자 클러스터링(K의갯수)를 다르게 입력을 해줘야 결과값이 다르게나옴
+#K의 갯수를 4기법모두 똑같이 입력시 하나의 파일을 돌리는 것이기 때문에
+#같은 값이 출력이됨. (그래서 경험적으로 K의 갯수를 조절해줘야함)
+write.table(df_groups1, "./complete_result.txt", row.names=FALSE, col.names=TRUE, sep="\t")
+write.table(df_groups2, "./single_result.txt", row.names=FALSE, col.names=TRUE, sep="\t") 
+write.table(df_groups3, "./average_result.txt", row.names=FALSE, col.names=TRUE, sep="\t") 
+write.table(df_groups4, "./ward.D_result.txt", row.names=FALSE, col.names=TRUE, sep="\t") 
+
